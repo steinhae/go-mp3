@@ -55,8 +55,13 @@ type SideInfo struct {
 
 func Read(source FullReader, header frameheader.FrameHeader) (*SideInfo, error) {
 	nch := header.NumberOfChannels()
-	// Calculate header audio data size
+	fmt.Println("Number of channels:", nch)
+
+	fmt.Println("Frame")
+
 	framesize := header.FrameSize()
+	// Calculate header audio data size
+	fmt.Println("FrameSize:", framesize)
 	if framesize > 2000 {
 		return nil, fmt.Errorf("mp3: framesize = %d\n", framesize)
 	}
@@ -65,6 +70,7 @@ func Read(source FullReader, header frameheader.FrameHeader) (*SideInfo, error) 
 	if nch == 1 {
 		sideinfo_size = 17
 	}
+	fmt.Println("SideInfo size:", sideinfo_size)
 	// Main data size is the rest of the frame,including ancillary data
 	main_data_size := framesize - sideinfo_size - 4 // sync+header
 	// CRC is 2 bytes

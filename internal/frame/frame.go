@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"strconv"
 
 	"github.com/hajimehoshi/go-mp3/internal/bits"
 	"github.com/hajimehoshi/go-mp3/internal/consts"
@@ -64,6 +65,7 @@ func readCRC(source FullReader) error {
 }
 
 func Read(source FullReader, position int64, prev *Frame) (frame *Frame, startPosition int64, err error) {
+	fmt.Println("Read frame at pos: " + strconv.Itoa(int(position)))
 	h, pos, err := frameheader.Read(source, position)
 	if err != nil {
 		return nil, 0, err
@@ -75,9 +77,9 @@ func Read(source FullReader, position int64, prev *Frame) (frame *Frame, startPo
 		}
 	}
 
-	if h.ID() != consts.Version1 {
-		return nil, 0, fmt.Errorf("mp3: only MPEG version 1 (want %d; got %d) is supported", consts.Version1, h.ID())
-	}
+	// if h.ID() != consts.Version1 {
+	// 	return nil, 0, fmt.Errorf("mp3: only MPEG version 1 (want %d; got %d) is supported", consts.Version1, h.ID())
+	// }
 	if h.Layer() != consts.Layer3 {
 		return nil, 0, fmt.Errorf("mp3: only layer3 (want %d; got %d) is supported", consts.Layer3, h.Layer())
 	}
@@ -116,6 +118,9 @@ func (f *Frame) SamplingFrequency() int {
 }
 
 func (f *Frame) Decode() []byte {
+
+	fmt.Println("Sampling freq:", f.SamplingFrequency())
+
 	out := make([]byte, consts.BytesPerFrame)
 	nch := f.header.NumberOfChannels()
 	for gr := 0; gr < 2; gr++ {

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build example
+//
 
 package main
 
@@ -28,7 +28,8 @@ import (
 )
 
 func run() error {
-	f, err := os.Open("classic.mp3")
+	// f, err := os.Open("classic.mp3")
+	f, err := os.Open("Test_mpeg2.mp3")
 	if err != nil {
 		return err
 	}

@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"strconv"
 
 	"github.com/hajimehoshi/go-mp3/internal/bits"
 	"github.com/hajimehoshi/go-mp3/internal/consts"
@@ -29,8 +28,9 @@ import (
 )
 
 var (
-	powtab34 = make([]float64, 8207)
-	pretab   = []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 3, 3, 3, 2, 0}
+	powtab34   = make([]float64, 8207)
+	pretab     = []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 3, 3, 3, 2, 0}
+	frameCount = 1
 )
 
 func init() {
@@ -64,12 +64,22 @@ func readCRC(source FullReader) error {
 	return nil
 }
 
+func printFrameHeader(pos int64, f *frameheader.FrameHeader) {
+	fmt.Println("----------------------------------")
+	fmt.Printf("Frame %v pos %v\n", frameCount, pos)
+	frameCount++
+	fmt.Printf("MPEG version %v layer %v | ", f.ID().Float(), f.Layer().Int())
+	fmt.Printf(" Bitrate %v kbps |", frameheader.Bitrate(f.Layer(), f.BitrateIndex())/1000)
+	fmt.Printf(" Sampling %v Hz |", f.SamplingFrequency().Int())
+	fmt.Printf(" %v\n", f.Mode().String())
+}
+
 func Read(source FullReader, position int64, prev *Frame) (frame *Frame, startPosition int64, err error) {
-	fmt.Println("Read frame at pos: " + strconv.Itoa(int(position)))
 	h, pos, err := frameheader.Read(source, position)
 	if err != nil {
 		return nil, 0, err
 	}
+	printFrameHeader(position, &h)
 
 	if h.ProtectionBit() == 0 {
 		if err := readCRC(source); err != nil {
@@ -84,7 +94,7 @@ func Read(source FullReader, position int64, prev *Frame) (frame *Frame, startPo
 		return nil, 0, fmt.Errorf("mp3: only layer3 (want %d; got %d) is supported", consts.Layer3, h.Layer())
 	}
 
-	si, err := sideinfo.Read(source, h)
+	si, err := sideinfo.Read(position, source, h)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -118,24 +128,15 @@ func (f *Frame) SamplingFrequency() int {
 }
 
 func (f *Frame) Decode() []byte {
-
-	fmt.Println("Sampling freq:", f.SamplingFrequency())
-
 	out := make([]byte, consts.BytesPerFrame)
-	nch := f.header.NumberOfChannels()
-	for gr := 0; gr < 2; gr++ {
-		for ch := 0; ch < nch; ch++ {
-			f.requantize(gr, ch)
-			f.reorder(gr, ch)
-		}
-		f.stereo(gr)
-		for ch := 0; ch < nch; ch++ {
-			f.antialias(gr, ch)
-			f.hybridSynthesis(gr, ch)
-			f.frequencyInversion(gr, ch)
-			f.subbandSynthesis(gr, ch, out[consts.SamplesPerGr*4*gr:])
-		}
-	}
+
+	f.requantize(0, 0)
+	f.reorder(0, 0)
+	f.stereo(0)
+	f.antialias(0, 0)
+	f.hybridSynthesis(0, 0)
+	f.frequencyInversion(0, 0)
+	f.subbandSynthesis(0, 0, out[consts.SamplesPerGr*4*0:])
 	return out
 }
 
@@ -149,7 +150,7 @@ func (f *Frame) requantizeProcessLong(gr, ch, is_pos, sfb int) {
 		0.25*(float64(f.sideInfo.GlobalGain[gr][ch])-210)
 	tmp1 := math.Pow(2.0, idx)
 	tmp2 := 0.0
-	if f.mainData.Is[gr][ch][is_pos] < 0.0 {
+	if f.mainData.Is[0][0][is_pos] < 0.0 {
 		tmp2 = -powtab34[int(-f.mainData.Is[gr][ch][is_pos])]
 	} else {
 		tmp2 = powtab34[int(f.mainData.Is[gr][ch][is_pos])]
@@ -290,8 +291,8 @@ func (f *Frame) reorder(gr int, ch int) {
 			}
 		}
 		// Copy reordered data of last band back to original vector
-		j := 3 * consts.SfBandIndicesSet[sfreq].S[12]
-		copy(f.mainData.Is[gr][ch][j:j+3*win_len], re[0:3*win_len])
+		// j := 3 * consts.SfBandIndicesSet[sfreq].S[12]
+		// copy(f.mainData.Is[gr][ch][j:j+3*win_len], re[0:3*win_len])
 	}
 }
 
@@ -301,7 +302,7 @@ var (
 
 func (f *Frame) stereoProcessIntensityLong(gr int, sfb int) {
 	is_ratio_l := float32(0)
-	is_ratio_r := float32(0)
+	// is_ratio_r := float32(0)
 	// Check that((is_pos[sfb]=scalefac) < 7) => no intensity stereo
 	if is_pos := f.mainData.ScalefacL[gr][0][sfb]; is_pos < 7 {
 		sfreq := f.header.SamplingFrequency() // Setup sampling freq index
@@ -309,22 +310,22 @@ func (f *Frame) stereoProcessIntensityLong(gr int, sfb int) {
 		sfb_stop := consts.SfBandIndicesSet[sfreq].L[sfb+1]
 		if is_pos == 6 { // tan((6*PI)/12 = PI/2) needs special treatment!
 			is_ratio_l = 1.0
-			is_ratio_r = 0.0
+			// is_ratio_r = 0.0
 		} else {
 			is_ratio_l = isRatios[is_pos] / (1.0 + isRatios[is_pos])
-			is_ratio_r = 1.0 / (1.0 + isRatios[is_pos])
+			// is_ratio_r = 1.0 / (1.0 + isRatios[is_pos])
 		}
 		// Now decode all samples in this scale factor band
 		for i := sfb_start; i < sfb_stop; i++ {
 			f.mainData.Is[gr][0][i] *= is_ratio_l
-			f.mainData.Is[gr][1][i] *= is_ratio_r
+			// f.mainData.Is[gr][1][i] *= is_ratio_r
 		}
 	}
 }
 
 func (f *Frame) stereoProcessIntensityShort(gr int, sfb int) {
 	is_ratio_l := float32(0)
-	is_ratio_r := float32(0)
+	// is_ratio_r := float32(0)
 	sfreq := f.header.SamplingFrequency() // Setup sampling freq index
 	// The window length
 	win_len := consts.SfBandIndicesSet[sfreq].S[sfb+1] - consts.SfBandIndicesSet[sfreq].S[sfb]
@@ -337,16 +338,16 @@ func (f *Frame) stereoProcessIntensityShort(gr int, sfb int) {
 			sfb_stop := sfb_start + win_len
 			if is_pos == 6 { // tan((6*PI)/12 = PI/2) needs special treatment!
 				is_ratio_l = 1.0
-				is_ratio_r = 0.0
+				// is_ratio_r = 0.0
 			} else {
 				is_ratio_l = isRatios[is_pos] / (1.0 + isRatios[is_pos])
-				is_ratio_r = 1.0 / (1.0 + isRatios[is_pos])
+				// is_ratio_r = 1.0 / (1.0 + isRatios[is_pos])
 			}
 			// Now decode all samples in this scale factor band
 			for i := sfb_start; i < sfb_stop; i++ {
 				// https://github.com/technosaurus/PDMP3/issues/3
 				f.mainData.Is[gr][0][i] *= is_ratio_l
-				f.mainData.Is[gr][1][i] *= is_ratio_r
+				// f.mainData.Is[gr][1][i] *= is_ratio_r
 			}
 		}
 	}

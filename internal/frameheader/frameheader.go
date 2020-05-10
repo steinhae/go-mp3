@@ -125,28 +125,25 @@ func (f FrameHeader) IsValid() bool {
 	return true
 }
 
-func bitrate(layer consts.Layer, index int) int {
+func Bitrate(layer consts.Layer, index int) int {
 	switch layer {
 	case consts.Layer1:
 		return []int{
-			0, 32000, 64000, 96000, 128000, 160000, 192000, 224000,
-			256000, 288000, 320000, 352000, 384000, 416000, 448000}[index]
-	case consts.Layer2:
-		return []int{
 			0, 32000, 48000, 56000, 64000, 80000, 96000, 112000,
-			128000, 160000, 192000, 224000, 256000, 320000, 384000}[index]
+			128000, 144000, 160000, 176000, 192000, 224000, 256000}[index]
+	case consts.Layer2:
 	case consts.Layer3:
 		return []int{
-			0, 32000, 40000, 48000, 56000, 64000, 80000, 96000,
-			112000, 128000, 160000, 192000, 224000, 256000, 320000}[index]
+			0, 8000, 16000, 24000, 32000, 40000, 48000, 56000,
+			64000, 80000, 96000, 112000, 128000, 144000, 160000}[index]
 	}
 	panic("not reached")
 }
 
 func (f FrameHeader) FrameSize() int {
-	return (144*bitrate(f.Layer(), f.BitrateIndex()))/
+	return ((144*Bitrate(f.Layer(), f.BitrateIndex()))/
 		f.SamplingFrequency().Int() +
-		int(f.PaddingBit())
+		int(f.PaddingBit())) / 2
 }
 
 func (f FrameHeader) NumberOfChannels() int {

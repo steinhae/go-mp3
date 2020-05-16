@@ -35,23 +35,26 @@ type MainData struct {
 	Is        [2][2][576]float32 // Huffman coded freq. lines
 }
 
-var scalefacSizes = [16][2]int{
+var scalefacSizesMpeg1 = [16][2]int{
 	{0, 0}, {0, 1}, {0, 2}, {0, 3}, {3, 0}, {1, 1}, {1, 2}, {1, 3},
 	{2, 1}, {2, 2}, {2, 3}, {3, 1}, {3, 2}, {3, 3}, {4, 2}, {4, 3},
 }
 
-func Read(source FullReader, prev *bits.Bits, header frameheader.FrameHeader, sideInfo *sideinfo.SideInfo) (*MainData, *bits.Bits, error) {
-	return III_get_scale_factors_2(source, prev, header, sideInfo)
-	// return getScaleFactors1(source, prev, header, sideInfo)
-}
+var scalefacSizesMpeg2 = [3][6][4]int{
+	{{6, 5, 5, 5}, {6, 5, 7, 3}, {11, 10, 0, 0},
+		{7, 7, 7, 0}, {6, 6, 6, 3}, {8, 8, 5, 0}},
+	{{9, 9, 9, 9}, {9, 9, 12, 6}, {18, 18, 0, 0},
+		{12, 12, 12, 0}, {12, 9, 9, 6}, {15, 12, 9, 0}},
+	{{6, 9, 9, 9}, {6, 9, 12, 6}, {15, 18, 0, 0},
+		{6, 15, 12, 0}, {6, 12, 9, 6}, {6, 18, 9, 0}}}
 
-var n_slen2 [512]int /* MPEG 2.0 slen for 'normal' mode */
+var nSlen2 [512]int /* MPEG 2.0 slen for 'normal' mode */
 
 func initSlen() {
 	for i := 0; i < 4; i++ {
 		for j := 0; j < 3; j++ {
 			n := j + i*3
-			n_slen2[n+500] = i | (j << 3) | (2 << 12) | (1 << 15)
+			nSlen2[n+500] = i | (j << 3) | (2 << 12) | (1 << 15)
 		}
 	}
 
@@ -60,7 +63,7 @@ func initSlen() {
 			for k := 0; k < 4; k++ {
 				for l := 0; l < 4; l++ {
 					n := l + k*4 + j*16 + i*80
-					n_slen2[n] = i | (j << 3) | (k << 6) | (l << 9) | (0 << 12)
+					nSlen2[n] = i | (j << 3) | (k << 6) | (l << 9) | (0 << 12)
 				}
 			}
 		}
@@ -69,38 +72,38 @@ func initSlen() {
 		for j := 0; j < 5; j++ {
 			for k := 0; k < 4; k++ {
 				n := k + j*4 + i*20
-				n_slen2[n+400] = i | (j << 3) | (k << 6) | (1 << 12)
+				nSlen2[n+400] = i | (j << 3) | (k << 6) | (1 << 12)
 			}
 		}
 	}
 }
 
-var scalefacSizes2 = [3][6][4]int{
-	{{6, 5, 5, 5}, {6, 5, 7, 3}, {11, 10, 0, 0},
-		{7, 7, 7, 0}, {6, 6, 6, 3}, {8, 8, 5, 0}},
-	{{9, 9, 9, 9}, {9, 9, 12, 6}, {18, 18, 0, 0},
-		{12, 12, 12, 0}, {12, 9, 9, 6}, {15, 12, 9, 0}},
-	{{6, 9, 9, 9}, {6, 9, 12, 6}, {15, 18, 0, 0},
-		{6, 15, 12, 0}, {6, 12, 9, 6}, {6, 18, 9, 0}}}
-
-func III_get_scale_factors_2(source FullReader, prev *bits.Bits, header frameheader.FrameHeader, sideInfo *sideinfo.SideInfo) (*MainData, *bits.Bits, error) {
-	// III_get_scale_factors_2(PMPSTR mp, int *scf, struct gr_info_s *gr_infos, int i_stereo)
-	initSlen()
-
+func Read(source FullReader, prev *bits.Bits, header frameheader.FrameHeader, sideInfo *sideinfo.SideInfo) (*MainData, *bits.Bits, error) {
 	nch := header.NumberOfChannels()
 	// Calculate header audio data size
 	framesize := header.FrameSize()
 	if framesize > 2000 {
-		// return nil, nil, fmt.Errorf("mp3: framesize = %d", framesize)
+		return nil, nil, fmt.Errorf("mp3: framesize = %d", framesize)
 	}
 	// Sideinfo is 17 bytes for one channel and 32 bytes for two
-	sideinfo_size := 32
-	if nch == 1 {
-		sideinfo_size = 9
+	var sideinfo_size int
+	if header.LowSamplingFrequency() == 1 {
+		if nch == 1 {
+			sideinfo_size = 9
+		} else {
+			sideinfo_size = 17
+		}
+	} else {
+		if nch == 1 {
+			sideinfo_size = 17
+		} else {
+			sideinfo_size = 32
+		}
 	}
+
 	// Main data size is the rest of the frame,including ancillary data
 	main_data_size := framesize - sideinfo_size - 4 // sync+header
-	fmt.Println("main_data_size = ", main_data_size)
+
 	// CRC is 2 bytes
 	if header.ProtectionBit() == 0 {
 		main_data_size -= 2
@@ -109,21 +112,31 @@ func III_get_scale_factors_2(source FullReader, prev *bits.Bits, header framehea
 	// two frames. main_data_begin indicates how many bytes from previous
 	// frames that should be used. This buffer is later accessed by the
 	// Bits function in the same way as the side info is.
-	fmt.Println("MainDataBegin =", sideInfo.MainDataBegin)
 	m, err := read(source, prev, main_data_size, sideInfo.MainDataBegin)
 	if err != nil {
 		// This could be due to not enough data in reservoir
 		// return nil, nil, err
 	}
 
+	if header.LowSamplingFrequency() == 1 {
+		return getScaleFactorsMpeg2(m, header, sideInfo)
+	}
+	return getScaleFactorsMpeg1(nch, prev, header, sideInfo)
+}
+
+func getScaleFactorsMpeg2(m *bits.Bits, header frameheader.FrameHeader, sideInfo *sideinfo.SideInfo) (*MainData, *bits.Bits, error) {
+
+	if len(nSlen2) == 0 {
+		initSlen()
+	}
+
 	md := &MainData{}
+
 	part_2_start := m.BitPos()
 
 	// unsigned char const *pnt;
 	numbits := 0
-
-	slen := n_slen2[sideInfo.ScalefacCompress[0][0]]
-
+	slen := nSlen2[sideInfo.ScalefacCompress[0][0]]
 	sideInfo.Preflag[0][0] = (slen >> 15) & 0x1
 
 	n := 0
@@ -143,12 +156,12 @@ func III_get_scale_factors_2(source FullReader, prev *bits.Bits, header framehea
 		num := slen & 0x7
 		slen >>= 3
 		if num > 0 {
-			for j := 0; j < scalefacSizes2[n][scaleFacSecondIndex][i]; j++ {
+			for j := 0; j < scalefacSizesMpeg2[n][scaleFacSecondIndex][i]; j++ {
 				scaleFactors = append(scaleFactors, m.Bits(num))
 			}
-			numbits += scalefacSizes2[n][scaleFacSecondIndex][i] * num
+			numbits += scalefacSizesMpeg2[n][scaleFacSecondIndex][i] * num
 		} else {
-			for j := 0; j < scalefacSizes2[n][scaleFacSecondIndex][i]; j++ {
+			for j := 0; j < scalefacSizesMpeg2[n][scaleFacSecondIndex][i]; j++ {
 				scaleFactors = append(scaleFactors, 0)
 			}
 		}
@@ -172,71 +185,21 @@ func III_get_scale_factors_2(source FullReader, prev *bits.Bits, header framehea
 	}
 
 	// Read Huffman coded data. Skip stuffing bits.
-	fmt.Println("part_2_start = ", part_2_start)
-
-	// pattern := []int{0, 0, 0, 1, 0, 1, 1}
-	// patternIndex := 0
-	// match := false
-	// for i := 0; i < 580; i++ {
-	// 	bit := m.Bit()
-	// 	if match == true {
-	// 		fmt.Println("bit: ", bit)
-	// 	}
-	// 	if pattern[patternIndex] == bit {
-	// 		if patternIndex == len(pattern)-1 {
-	// 			fmt.Println("Match at:", i)
-	// 			match = true
-	// 		} else {
-	// 			patternIndex++
-	// 		}
-	// 	} else {
-	// 		patternIndex = 0
-	// 	}
-	// }
-
 	if err := readHuffman(m, header, sideInfo, md, part_2_start, 0, 0); err != nil {
 		return nil, nil, err
 	}
 	// The ancillary data is stored here,but we ignore it.
 	return md, m, nil
-
-	// return numbits;
-
 }
 
-func getScaleFactors1(source FullReader, prev *bits.Bits, header frameheader.FrameHeader, sideInfo *sideinfo.SideInfo) (*MainData, *bits.Bits, error) {
-	nch := header.NumberOfChannels()
-	// Calculate header audio data size
-	framesize := header.FrameSize()
-	if framesize > 2000 {
-		return nil, nil, fmt.Errorf("mp3: framesize = %d", framesize)
-	}
-	// Sideinfo is 17 bytes for one channel and 32 bytes for two
-	sideinfo_size := 32
-	if nch == 1 {
-		sideinfo_size = 17
-	}
-	// Main data size is the rest of the frame,including ancillary data
-	main_data_size := framesize - sideinfo_size - 4 // sync+header
-	// CRC is 2 bytes
-	if header.ProtectionBit() == 0 {
-		main_data_size -= 2
-	}
-	// Assemble main data buffer with data from this frame and the previous
-	// two frames. main_data_begin indicates how many bytes from previous
-	// frames that should be used. This buffer is later accessed by the
-	// Bits function in the same way as the side info is.
-	m, err := read(source, prev, main_data_size, sideInfo.MainDataBegin)
-	if err != nil {
-		// This could be due to not enough data in reservoir
-		return nil, nil, err
-	}
+func getScaleFactorsMpeg1(nch int, m *bits.Bits, header frameheader.FrameHeader, sideInfo *sideinfo.SideInfo) (*MainData, *bits.Bits, error) {
+
 	md := &MainData{}
 	for ch := 0; ch < nch; ch++ {
 		part_2_start := m.BitPos()
 		// 	// Number of bits in the bitstream for the bands
-		slen1 := scalefacSizes[sideInfo.ScalefacCompress[0][ch]][0]
-		slen2 := scalefacSizes[sideInfo.ScalefacCompress[0][ch]][1]
+		slen1 := scalefacSizesMpeg1[sideInfo.ScalefacCompress[0][ch]][0]
+		slen2 := scalefacSizesMpeg1[sideInfo.ScalefacCompress[0][ch]][1]
 		if sideInfo.WinSwitchFlag[0][ch] == 1 && sideInfo.BlockType[0][ch] == 2 {
 			if sideInfo.MixedBlockFlag[0][ch] != 0 {
 				for sfb := 0; sfb < 8; sfb++ {
@@ -285,7 +248,7 @@ func getScaleFactors1(source FullReader, prev *bits.Bits, header frameheader.Fra
 
 		}
 		// Read Huffman coded data. Skip stuffing bits.
-		if err := readHuffman(m, header, sideInfo, md, part_2_start, 0, 0); err != nil {
+		if err := readHuffman(m, header, sideInfo, md, part_2_start, 0, ch); err != nil {
 			return nil, nil, err
 		}
 	}

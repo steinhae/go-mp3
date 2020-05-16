@@ -15,7 +15,6 @@
 package frame
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io"
 	"math"
@@ -159,65 +158,15 @@ func openAndSeek(file string, seekTo int64) *os.File {
 	return f
 }
 
-// func (frame *Frame) loadScaleFactors(file string) {
-// 	f := openAndSeek(file, (int64(frameCount-2) * 576 * 4))
-
-// 	shortBlock := true
-// 	maxIter := 22
-// 	if frame.sideInfo.BlockType[0][0] == 2 {
-// 		maxIter = 39
-// 		shortBlock = false
-// 	}
-
-// 	for i := 0; i < maxIter; i++ {
-// 		b1 := make([]byte, 4)
-// 		n1, err := f.Read(b1)
-// 		if n1 != 0 && err != nil {
-// 			panic(err)
-// 		}
-// 		bits := binary.LittleEndian.Uint32(b1)
-// 		floating := math.Float32frombits(bits)
-// 		// frame.mainData.ScalefacS[0][0][i] = floating
-// 	}
-
-// }
-
-func (frame *Frame) replaceData(file string) {
-	f := openAndSeek(file, (int64(frameCount-2) * 576 * 4))
-	for i := 0; i < 576; i++ {
-		b1 := make([]byte, 4)
-		n1, err := f.Read(b1)
-		if n1 != 0 && err != nil {
-			panic(err)
-		}
-		bits := binary.LittleEndian.Uint32(b1)
-		floating := math.Float32frombits(bits)
-		frame.mainData.Is[0][0][i] = floating
-	}
-}
-
 func (f *Frame) Decode() []byte {
 	out := make([]byte, consts.BytesPerFrame)
-
-	dumps := make([][]float32, 0)
-	dumps = append(dumps, f.dumpMain())
-	// f.loadScaleFactors("scaleFactors.bin")
 	f.requantize(0, 0)
-	// f.replaceData("floats.bin")
-	dumps = append(dumps, f.dumpMain())
 	f.reorder(0, 0)
-	// dumps = append(dumps, f.dumpMain())
 	f.stereo(0)
 	f.antialias(0, 0)
-	// dumps = append(dumps, f.dumpMain())
 	f.hybridSynthesis(0, 0)
-	// dumps = append(dumps, f.dumpMain())
 	f.frequencyInversion(0, 0)
-	// dumps = append(dumps, f.dumpMain())
 	f.subbandSynthesis(0, 0, out[consts.SamplesPerGr*4*0:])
-
-	printDumps(dumps)
-
 	return out
 }
 

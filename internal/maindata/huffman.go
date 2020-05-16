@@ -58,9 +58,6 @@ func readHuffman(m *bits.Bits, header frameheader.FrameHeader, sideInfo *sideinf
 		region_2_start = l[j]
 	}
 
-	fmt.Println("Region1start:", region_1_start)
-	fmt.Println("Region2start:", region_2_start)
-
 	// Read big_values using tables according to region_x_start
 	for is_pos := 0; is_pos < sideInfo.BigValues[gr][ch]*2; is_pos++ {
 		// #22

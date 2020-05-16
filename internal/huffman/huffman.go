@@ -351,7 +351,6 @@ func Decode(m *bits.Bits, table_num int) (x, y, v, w int, err error) {
 	bitsleft := 32
 	treelen := huffmanMain[table_num].treelen
 	linbits := huffmanMain[table_num].linbits
-	// fmt.Println("huffmanDecodeEnter")
 	if treelen == 0 { // Check for empty tables
 		return 0, 0, 0, 0, nil
 	}
@@ -364,9 +363,7 @@ func Decode(m *bits.Bits, table_num int) (x, y, v, w int, err error) {
 			y = int(htptr[point] & 0xf)
 			break
 		}
-		mBit := m.Bit()
-		// fmt.Println("mBit:", mBit)
-		if mBit != 0 { // Go right in tree
+		if m.Bit() != 0 { // Go right in tree
 			for (htptr[point] & 0xff) >= 250 {
 				point += int(htptr[point]) & 0xff
 			}

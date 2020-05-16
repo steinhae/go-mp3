@@ -101,6 +101,14 @@ func (f FrameHeader) Emphasis() int {
 	return int(f&0x00000003) >> 0
 }
 
+// LowSamplingFrequency returns whether the frame is encoded in a low sampling frequency => 0 = MPEG-1, 1 = MPEG-2/2.5
+func (f FrameHeader) LowSamplingFrequency() int {
+	if f.ID().Float() == 1 {
+		return 0
+	}
+	return 1
+}
+
 // IsValid returns a boolean value indicating whether the header is valid or not.
 func (f FrameHeader) IsValid() bool {
 	const sync = 0xffe00000
@@ -143,7 +151,7 @@ func Bitrate(layer consts.Layer, index int) int {
 func (f FrameHeader) FrameSize() int {
 	return ((144*Bitrate(f.Layer(), f.BitrateIndex()))/
 		f.SamplingFrequency().Int() +
-		int(f.PaddingBit())) / 2
+		int(f.PaddingBit())) >> f.LowSamplingFrequency()
 }
 
 func (f FrameHeader) NumberOfChannels() int {

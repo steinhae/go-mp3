@@ -15,9 +15,11 @@
 package frame
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io"
 	"math"
+	"os"
 
 	"github.com/hajimehoshi/go-mp3/internal/bits"
 	"github.com/hajimehoshi/go-mp3/internal/consts"
@@ -127,16 +129,95 @@ func (f *Frame) SamplingFrequency() int {
 	return f.header.SamplingFrequency().Int()
 }
 
+func (f *Frame) dumpMain() []float32 {
+	res := make([]float32, 576)
+	for i := 0; i < 576; i++ {
+		res[i] = f.mainData.Is[0][0][i]
+	}
+	return res
+}
+
+func printDumps(dumps [][]float32) {
+	for i := 0; i < 576; i++ {
+		format := "%03d"
+		s := []interface{}{}
+		s = append(s, i)
+		for dumpIndex := 0; dumpIndex < len(dumps); dumpIndex++ {
+			format += " | %10f"
+			s = append(s, dumps[dumpIndex][i])
+		}
+		fmt.Printf(format+"\n", s...)
+	}
+}
+
+func openAndSeek(file string, seekTo int64) *os.File {
+	f, err := os.Open("/home/hannes/dev/go/minimp3/example/decode/" + file)
+	if err != nil {
+		panic(err)
+	}
+	f.Seek(seekTo, 0)
+	return f
+}
+
+// func (frame *Frame) loadScaleFactors(file string) {
+// 	f := openAndSeek(file, (int64(frameCount-2) * 576 * 4))
+
+// 	shortBlock := true
+// 	maxIter := 22
+// 	if frame.sideInfo.BlockType[0][0] == 2 {
+// 		maxIter = 39
+// 		shortBlock = false
+// 	}
+
+// 	for i := 0; i < maxIter; i++ {
+// 		b1 := make([]byte, 4)
+// 		n1, err := f.Read(b1)
+// 		if n1 != 0 && err != nil {
+// 			panic(err)
+// 		}
+// 		bits := binary.LittleEndian.Uint32(b1)
+// 		floating := math.Float32frombits(bits)
+// 		// frame.mainData.ScalefacS[0][0][i] = floating
+// 	}
+
+// }
+
+func (frame *Frame) replaceData(file string) {
+	f := openAndSeek(file, (int64(frameCount-2) * 576 * 4))
+	for i := 0; i < 576; i++ {
+		b1 := make([]byte, 4)
+		n1, err := f.Read(b1)
+		if n1 != 0 && err != nil {
+			panic(err)
+		}
+		bits := binary.LittleEndian.Uint32(b1)
+		floating := math.Float32frombits(bits)
+		frame.mainData.Is[0][0][i] = floating
+	}
+}
+
 func (f *Frame) Decode() []byte {
 	out := make([]byte, consts.BytesPerFrame)
 
+	dumps := make([][]float32, 0)
+	dumps = append(dumps, f.dumpMain())
+	// f.loadScaleFactors("scaleFactors.bin")
 	f.requantize(0, 0)
+	// f.replaceData("floats.bin")
+	dumps = append(dumps, f.dumpMain())
 	f.reorder(0, 0)
+	// dumps = append(dumps, f.dumpMain())
 	f.stereo(0)
 	f.antialias(0, 0)
+	// dumps = append(dumps, f.dumpMain())
 	f.hybridSynthesis(0, 0)
+	// dumps = append(dumps, f.dumpMain())
 	f.frequencyInversion(0, 0)
+	// dumps = append(dumps, f.dumpMain())
 	f.subbandSynthesis(0, 0, out[consts.SamplesPerGr*4*0:])
+
+	printDumps(dumps)
+
 	return out
 }
 
@@ -291,8 +372,8 @@ func (f *Frame) reorder(gr int, ch int) {
 			}
 		}
 		// Copy reordered data of last band back to original vector
-		// j := 3 * consts.SfBandIndicesSet[sfreq].S[12]
-		// copy(f.mainData.Is[gr][ch][j:j+3*win_len], re[0:3*win_len])
+		j := 3 * consts.SfBandIndicesSet[sfreq].S[12]
+		copy(f.mainData.Is[gr][ch][j:j+3*win_len], re[0:3*win_len])
 	}
 }
 

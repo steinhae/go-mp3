@@ -92,7 +92,7 @@ func writeOut(decoder *mp3.Decoder) {
 func newAudioIntBuffer(decoder *mp3.Decoder) (*audio.IntBuffer, error) {
 	buf := audio.IntBuffer{
 		Format: &audio.Format{
-			NumChannels: 1,
+			NumChannels: 2,
 			SampleRate:  decoder.SampleRate(),
 		},
 	}

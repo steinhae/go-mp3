@@ -69,7 +69,7 @@ func Read(pos int64, source FullReader, header frameheader.FrameHeader) (*SideIn
 	// Sideinfo is 17 bytes for one channel and 32 bytes for two
 	sideinfo_size := 32
 	if nch == 1 {
-		sideinfo_size = 17
+		sideinfo_size = 9
 	}
 	fmt.Println("SideInfo size:", sideinfo_size)
 	// Main data size is the rest of the frame,including ancillary data
@@ -140,6 +140,7 @@ func Read(pos int64, source FullReader, header frameheader.FrameHeader) (*SideIn
 			si.Region0Count[0][ch] = s.Bits(4)
 			si.Region1Count[0][ch] = s.Bits(3)
 			si.BlockType[0][ch] = 0 // Implicit
+			si.MixedBlockFlag[0][ch] = 0
 		}
 		// si.Preflag[0][ch] = s.Bits(1)
 		si.ScalefacScale[0][ch] = s.Bits(1)

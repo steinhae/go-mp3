@@ -154,6 +154,25 @@ func (f FrameHeader) FrameSize() int {
 		int(f.PaddingBit())) >> f.LowSamplingFrequency()
 }
 
+func (f FrameHeader) SideInfoSize() int {
+	mono := f.Mode() == consts.ModeSingleChannel
+	var sideinfo_size int
+	if f.LowSamplingFrequency() == 1 {
+		if mono {
+			sideinfo_size = 9
+		} else {
+			sideinfo_size = 17
+		}
+	} else {
+		if mono {
+			sideinfo_size = 17
+		} else {
+			sideinfo_size = 32
+		}
+	}
+	return sideinfo_size
+}
+
 func (f FrameHeader) NumberOfChannels() int {
 	if f.Mode() == consts.ModeSingleChannel {
 		return 1

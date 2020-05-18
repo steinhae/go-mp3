@@ -66,13 +66,13 @@ func readCRC(source FullReader) error {
 }
 
 func printFrameHeader(pos int64, f *frameheader.FrameHeader) {
-	fmt.Println("----------------------------------")
-	fmt.Printf("Frame %v pos %v\n", frameCount, pos)
-	frameCount++
-	fmt.Printf("MPEG version %v layer %v | ", f.ID().Float(), f.Layer().Int())
-	fmt.Printf(" Bitrate %v kbps |", frameheader.Bitrate(f.Layer(), f.BitrateIndex())/1000)
-	fmt.Printf(" Sampling %v Hz |", f.SamplingFrequency().Int())
-	fmt.Printf(" %v\n", f.Mode().String())
+	// fmt.Println("----------------------------------")
+	// fmt.Printf("Frame %v pos %v\n", frameCount, pos)
+	// frameCount++
+	// fmt.Printf("MPEG version %v layer %v | ", f.ID().Float(), f.Layer().Int())
+	// fmt.Printf(" Bitrate %v kbps |", frameheader.Bitrate(f.Layer(), f.BitrateIndex())/1000)
+	// fmt.Printf(" Sampling %v Hz |", f.SamplingFrequency().Int())
+	// fmt.Printf(" %v\n", f.Mode().String())
 }
 
 func Read(source FullReader, position int64, prev *Frame) (frame *Frame, startPosition int64, err error) {

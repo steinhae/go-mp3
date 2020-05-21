@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"os"
 
 	"github.com/hajimehoshi/go-mp3/internal/bits"
 	"github.com/hajimehoshi/go-mp3/internal/consts"
@@ -128,35 +127,35 @@ func (f *Frame) SamplingFrequency() int {
 	return f.header.SamplingFrequency().Int()
 }
 
-func (f *Frame) dumpMain() []float32 {
-	res := make([]float32, 576)
-	for i := 0; i < 576; i++ {
-		res[i] = f.mainData.Is[0][0][i]
-	}
-	return res
-}
+// func (f *Frame) dumpMain() []float32 {
+// 	res := make([]float32, 576)
+// 	for i := 0; i < 576; i++ {
+// 		res[i] = f.mainData.Is[0][0][i]
+// 	}
+// 	return res
+// }
 
-func printDumps(dumps [][]float32) {
-	for i := 0; i < 576; i++ {
-		format := "%03d"
-		s := []interface{}{}
-		s = append(s, i)
-		for dumpIndex := 0; dumpIndex < len(dumps); dumpIndex++ {
-			format += " | %10f"
-			s = append(s, dumps[dumpIndex][i])
-		}
-		fmt.Printf(format+"\n", s...)
-	}
-}
+// func printDumps(dumps [][]float32) {
+// 	for i := 0; i < 576; i++ {
+// 		format := "%03d"
+// 		s := []interface{}{}
+// 		s = append(s, i)
+// 		for dumpIndex := 0; dumpIndex < len(dumps); dumpIndex++ {
+// 			format += " | %10f"
+// 			s = append(s, dumps[dumpIndex][i])
+// 		}
+// 		fmt.Printf(format+"\n", s...)
+// 	}
+// }
 
-func openAndSeek(file string, seekTo int64) *os.File {
-	f, err := os.Open("/home/hannes/dev/go/minimp3/example/decode/" + file)
-	if err != nil {
-		panic(err)
-	}
-	f.Seek(seekTo, 0)
-	return f
-}
+// func openAndSeek(file string, seekTo int64) *os.File {
+// 	f, err := os.Open("/home/hannes/dev/go/minimp3/example/decode/" + file)
+// 	if err != nil {
+// 		panic(err)
+// 	}
+// 	f.Seek(seekTo, 0)
+// 	return f
+// }
 
 func (f *Frame) Decode() []byte {
 	out := make([]byte, consts.BytesPerFrame)
@@ -206,9 +205,16 @@ func (f *Frame) requantizeProcessShort(gr, ch, is_pos, sfb, win int) {
 	f.mainData.Is[gr][ch][is_pos] = float32(tmp1 * tmp2)
 }
 
+func getSfBandIndicesArray(header *frameheader.FrameHeader) ([23]int, [23]int) {
+	sfreq := header.SamplingFrequency() // Setup sampling frequency index
+	lsf := header.LowSamplingFrequency()
+	sfBandIndicesShort := consts.SfBandIndices[lsf][sfreq][consts.SfBandIndicesShort]
+	sfBandIndicesLong := consts.SfBandIndices[lsf][sfreq][consts.SfBandIndicesLong]
+	return sfBandIndicesLong, sfBandIndicesShort
+}
+
 func (f *Frame) requantize(gr int, ch int) {
-	// Setup sampling frequency index
-	sfreq := f.header.SamplingFrequency()
+	sfBandIndicesLong, sfBandIndicesShort := getSfBandIndicesArray(&f.header)
 	// Determine type of block to process
 	if f.sideInfo.WinSwitchFlag[gr][ch] == 1 && f.sideInfo.BlockType[gr][ch] == 2 { // Short blocks
 		// Check if the first two subbands
@@ -216,27 +222,27 @@ func (f *Frame) requantize(gr int, ch int) {
 		if f.sideInfo.MixedBlockFlag[gr][ch] != 0 { // 2 longbl. sb  first
 			// First process the 2 long block subbands at the start
 			sfb := 0
-			next_sfb := consts.SfBandIndicesSet[sfreq].L[sfb+1]
+			next_sfb := sfBandIndicesLong[sfb+1]
 			for i := 0; i < 36; i++ {
 				if i == next_sfb {
 					sfb++
-					next_sfb = consts.SfBandIndicesSet[sfreq].L[sfb+1]
+					next_sfb = sfBandIndicesLong[sfb+1]
 				}
 				f.requantizeProcessLong(gr, ch, i, sfb)
 			}
 			// And next the remaining,non-zero,bands which uses short blocks
 			sfb = 3
-			next_sfb = consts.SfBandIndicesSet[sfreq].S[sfb+1] * 3
-			win_len := consts.SfBandIndicesSet[sfreq].S[sfb+1] -
-				consts.SfBandIndicesSet[sfreq].S[sfb]
+			next_sfb = sfBandIndicesShort[sfb+1] * 3
+			win_len := sfBandIndicesShort[sfb+1] -
+				sfBandIndicesShort[sfb]
 
 			for i := 36; i < int(f.sideInfo.Count1[gr][ch]); /* i++ done below! */ {
 				// Check if we're into the next scalefac band
 				if i == next_sfb {
 					sfb++
-					next_sfb = consts.SfBandIndicesSet[sfreq].S[sfb+1] * 3
-					win_len = consts.SfBandIndicesSet[sfreq].S[sfb+1] -
-						consts.SfBandIndicesSet[sfreq].S[sfb]
+					next_sfb = sfBandIndicesShort[sfb+1] * 3
+					win_len = sfBandIndicesShort[sfb+1] -
+						sfBandIndicesShort[sfb]
 				}
 				for win := 0; win < 3; win++ {
 					for j := 0; j < win_len; j++ {
@@ -248,16 +254,16 @@ func (f *Frame) requantize(gr int, ch int) {
 			}
 		} else { // Only short blocks
 			sfb := 0
-			next_sfb := consts.SfBandIndicesSet[sfreq].S[sfb+1] * 3
-			win_len := consts.SfBandIndicesSet[sfreq].S[sfb+1] -
-				consts.SfBandIndicesSet[sfreq].S[sfb]
+			next_sfb := sfBandIndicesShort[sfb+1] * 3
+			win_len := sfBandIndicesShort[sfb+1] -
+				sfBandIndicesShort[sfb]
 			for i := 0; i < int(f.sideInfo.Count1[gr][ch]); /* i++ done below! */ {
 				// Check if we're into the next scalefac band
 				if i == next_sfb {
 					sfb++
-					next_sfb = consts.SfBandIndicesSet[sfreq].S[sfb+1] * 3
-					win_len = consts.SfBandIndicesSet[sfreq].S[sfb+1] -
-						consts.SfBandIndicesSet[sfreq].S[sfb]
+					next_sfb = sfBandIndicesShort[sfb+1] * 3
+					win_len = sfBandIndicesShort[sfb+1] -
+						sfBandIndicesShort[sfb]
 				}
 				for win := 0; win < 3; win++ {
 					for j := 0; j < win_len; j++ {
@@ -269,11 +275,11 @@ func (f *Frame) requantize(gr int, ch int) {
 		}
 	} else { // Only long blocks
 		sfb := 0
-		next_sfb := consts.SfBandIndicesSet[sfreq].L[sfb+1]
+		next_sfb := sfBandIndicesLong[sfb+1]
 		for i := 0; i < int(f.sideInfo.Count1[gr][ch]); i++ {
 			if i == next_sfb {
 				sfb++
-				next_sfb = consts.SfBandIndicesSet[sfreq].L[sfb+1]
+				next_sfb = sfBandIndicesLong[sfb+1]
 			}
 			f.requantizeProcessLong(gr, ch, i, sfb)
 		}
@@ -283,7 +289,8 @@ func (f *Frame) requantize(gr int, ch int) {
 func (f *Frame) reorder(gr int, ch int) {
 	re := make([]float32, consts.SamplesPerGr)
 
-	sfreq := f.header.SamplingFrequency() // Setup sampling freq index
+	_, sfBandIndicesShort := getSfBandIndicesArray(&f.header)
+
 	// Only reorder short blocks
 	if (f.sideInfo.WinSwitchFlag[gr][ch] == 1) && (f.sideInfo.BlockType[gr][ch] == 2) { // Short blocks
 		// Check if the first two subbands
@@ -293,8 +300,8 @@ func (f *Frame) reorder(gr int, ch int) {
 		if f.sideInfo.MixedBlockFlag[gr][ch] != 0 {
 			sfb = 3
 		}
-		next_sfb := consts.SfBandIndicesSet[sfreq].S[sfb+1] * 3
-		win_len := consts.SfBandIndicesSet[sfreq].S[sfb+1] - consts.SfBandIndicesSet[sfreq].S[sfb]
+		next_sfb := sfBandIndicesShort[sfb+1] * 3
+		win_len := sfBandIndicesShort[sfb+1] - sfBandIndicesShort[sfb]
 		i := 36
 		if sfb == 0 {
 			i = 0
@@ -303,15 +310,15 @@ func (f *Frame) reorder(gr int, ch int) {
 			// Check if we're into the next scalefac band
 			if i == next_sfb {
 				// Copy reordered data back to the original vector
-				j := 3 * consts.SfBandIndicesSet[sfreq].S[sfb]
+				j := 3 * sfBandIndicesShort[sfb]
 				copy(f.mainData.Is[gr][ch][j:j+3*win_len], re[0:3*win_len])
 				// Check if this band is above the rzero region,if so we're done
 				if i >= f.sideInfo.Count1[gr][ch] {
 					return
 				}
 				sfb++
-				next_sfb = consts.SfBandIndicesSet[sfreq].S[sfb+1] * 3
-				win_len = consts.SfBandIndicesSet[sfreq].S[sfb+1] - consts.SfBandIndicesSet[sfreq].S[sfb]
+				next_sfb = sfBandIndicesShort[sfb+1] * 3
+				win_len = sfBandIndicesShort[sfb+1] - sfBandIndicesShort[sfb]
 			}
 			for win := 0; win < 3; win++ { // Do the actual reordering
 				for j := 0; j < win_len; j++ {
@@ -321,7 +328,7 @@ func (f *Frame) reorder(gr int, ch int) {
 			}
 		}
 		// Copy reordered data of last band back to original vector
-		j := 3 * consts.SfBandIndicesSet[sfreq].S[12]
+		j := 3 * sfBandIndicesShort[12]
 		copy(f.mainData.Is[gr][ch][j:j+3*win_len], re[0:3*win_len])
 	}
 }
@@ -335,9 +342,9 @@ func (f *Frame) stereoProcessIntensityLong(gr int, sfb int) {
 	// is_ratio_r := float32(0)
 	// Check that((is_pos[sfb]=scalefac) < 7) => no intensity stereo
 	if is_pos := f.mainData.ScalefacL[gr][0][sfb]; is_pos < 7 {
-		sfreq := f.header.SamplingFrequency() // Setup sampling freq index
-		sfb_start := consts.SfBandIndicesSet[sfreq].L[sfb]
-		sfb_stop := consts.SfBandIndicesSet[sfreq].L[sfb+1]
+		sfBandIndicesLong, _ := getSfBandIndicesArray(&f.header)
+		sfb_start := sfBandIndicesLong[sfb]
+		sfb_stop := sfBandIndicesLong[sfb+1]
 		if is_pos == 6 { // tan((6*PI)/12 = PI/2) needs special treatment!
 			is_ratio_l = 1.0
 			// is_ratio_r = 0.0
@@ -356,15 +363,15 @@ func (f *Frame) stereoProcessIntensityLong(gr int, sfb int) {
 func (f *Frame) stereoProcessIntensityShort(gr int, sfb int) {
 	is_ratio_l := float32(0)
 	// is_ratio_r := float32(0)
-	sfreq := f.header.SamplingFrequency() // Setup sampling freq index
+	_, sfBandIndicesShort := getSfBandIndicesArray(&f.header)
 	// The window length
-	win_len := consts.SfBandIndicesSet[sfreq].S[sfb+1] - consts.SfBandIndicesSet[sfreq].S[sfb]
+	win_len := sfBandIndicesShort[sfb+1] - sfBandIndicesShort[sfb]
 	// The three windows within the band has different scalefactors
 	for win := 0; win < 3; win++ {
 		// Check that((is_pos[sfb]=scalefac) < 7) => no intensity stereo
 		is_pos := f.mainData.ScalefacS[gr][0][sfb][win]
 		if is_pos < 7 {
-			sfb_start := consts.SfBandIndicesSet[sfreq].S[sfb]*3 + win_len*win
+			sfb_start := sfBandIndicesShort[sfb]*3 + win_len*win
 			sfb_stop := sfb_start + win_len
 			if is_pos == 6 { // tan((6*PI)/12 = PI/2) needs special treatment!
 				is_ratio_l = 1.0
@@ -402,9 +409,7 @@ func (f *Frame) stereo(gr int) {
 	}
 
 	if f.header.UseIntensityStereo() {
-		// Setup sampling frequency index
-		sfreq := f.header.SamplingFrequency()
-
+		sfBandIndicesLong, sfBandIndicesShort := getSfBandIndicesArray(&f.header)
 		// First band that is intensity stereo encoded is first band scale factor
 		// band on or above count1 frequency line. N.B.: Intensity stereo coding is
 		// only done for higher subbands, but logic is here for lower subbands.
@@ -416,21 +421,21 @@ func (f *Frame) stereo(gr int) {
 			if f.sideInfo.MixedBlockFlag[gr][0] != 0 { // 2 longbl. sb  first
 				for sfb := 0; sfb < 8; sfb++ { // First process 8 sfb's at start
 					// Is this scale factor band above count1 for the right channel?
-					if consts.SfBandIndicesSet[sfreq].L[sfb] >= f.sideInfo.Count1[gr][1] {
+					if sfBandIndicesLong[sfb] >= f.sideInfo.Count1[gr][1] {
 						f.stereoProcessIntensityLong(gr, sfb)
 					}
 				}
 				// And next the remaining bands which uses short blocks
 				for sfb := 3; sfb < 12; sfb++ {
 					// Is this scale factor band above count1 for the right channel?
-					if consts.SfBandIndicesSet[sfreq].S[sfb]*3 >= f.sideInfo.Count1[gr][1] {
+					if sfBandIndicesShort[sfb]*3 >= f.sideInfo.Count1[gr][1] {
 						f.stereoProcessIntensityShort(gr, sfb)
 					}
 				}
 			} else { // Only short blocks
 				for sfb := 0; sfb < 12; sfb++ {
 					// Is this scale factor band above count1 for the right channel?
-					if consts.SfBandIndicesSet[sfreq].S[sfb]*3 >= f.sideInfo.Count1[gr][1] {
+					if sfBandIndicesShort[sfb]*3 >= f.sideInfo.Count1[gr][1] {
 						f.stereoProcessIntensityShort(gr, sfb)
 					}
 				}
@@ -438,7 +443,7 @@ func (f *Frame) stereo(gr int) {
 		} else { // Only long blocks
 			for sfb := 0; sfb < 21; sfb++ {
 				// Is this scale factor band above count1 for the right channel?
-				if consts.SfBandIndicesSet[sfreq].L[sfb] >= f.sideInfo.Count1[gr][1] {
+				if sfBandIndicesLong[sfb] >= f.sideInfo.Count1[gr][1] {
 					f.stereoProcessIntensityLong(gr, sfb)
 				}
 			}

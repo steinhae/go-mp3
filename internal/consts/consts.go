@@ -81,30 +81,14 @@ func (m Mode) String() string {
 
 const (
 	SamplesPerGr  = 576
-	Granules      = 1
-	BytesPerFrame = SamplesPerGr * Granules * 4
+	GranulesMpeg1 = 2
 )
 
 type SamplingFrequency int
 
 const (
-	SamplingFrequency22050    SamplingFrequency = 0
-	SamplingFrequency24000    SamplingFrequency = 1
-	SamplingFrequency16000    SamplingFrequency = 2
 	SamplingFrequencyReserved SamplingFrequency = 3
 )
-
-func (s SamplingFrequency) Int() int {
-	switch s {
-	case SamplingFrequency22050:
-		return 22050
-	case SamplingFrequency24000:
-		return 24000
-	case SamplingFrequency16000:
-		return 16000
-	}
-	panic("not reahed")
-}
 
 const (
 	SfBandIndicesLong  = 0

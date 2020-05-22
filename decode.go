@@ -84,7 +84,9 @@ func (d *Decoder) Seek(offset int64, whence int) (int64, error) {
 	d.pos = npos
 	d.buf = nil
 	d.frame = nil
-	f := d.pos / consts.BytesPerFrame
+	// TODO: Solve for MPEG2
+	bytesPerFrame := int64(consts.SamplesPerGr * consts.GranulesMpeg1 * 4) // this is hardcoded for MPEG1 -> seek won't work with MPEG2 files
+	f := d.pos / bytesPerFrame
 	// If the frame is not first, read the previous ahead of reading that
 	// because the previous frame can affect the targeted frame.
 	if f > 0 {
@@ -98,7 +100,7 @@ func (d *Decoder) Seek(offset int64, whence int) (int64, error) {
 		if err := d.readFrame(); err != nil {
 			return 0, err
 		}
-		d.buf = d.buf[consts.BytesPerFrame+(d.pos%consts.BytesPerFrame):]
+		d.buf = d.buf[bytesPerFrame+(d.pos%bytesPerFrame):]
 	} else {
 		if _, err := d.source.Seek(d.frameStarts[f], 0); err != nil {
 			return 0, err
@@ -153,7 +155,7 @@ func (d *Decoder) ensureFrameStartsAndLength() error {
 			return err
 		}
 		d.frameStarts = append(d.frameStarts, pos)
-		l += consts.BytesPerFrame
+		l += int64(h.BytesPerFrame())
 
 		buf := make([]byte, h.FrameSize()-4)
 		if _, err := d.source.ReadFull(buf); err != nil {

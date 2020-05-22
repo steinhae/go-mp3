@@ -124,7 +124,7 @@ func Read(source FullReader, position int64, prev *Frame) (frame *Frame, startPo
 }
 
 func (f *Frame) SamplingFrequency() int {
-	return f.header.SamplingFrequency().Int()
+	return f.header.SamplingFrequencyValue()
 }
 
 // func (f *Frame) dumpMain() []float32 {
@@ -158,14 +158,21 @@ func (f *Frame) SamplingFrequency() int {
 // }
 
 func (f *Frame) Decode() []byte {
-	out := make([]byte, consts.BytesPerFrame)
-	f.requantize(0, 0)
-	f.reorder(0, 0)
-	f.stereo(0)
-	f.antialias(0, 0)
-	f.hybridSynthesis(0, 0)
-	f.frequencyInversion(0, 0)
-	f.subbandSynthesis(0, 0, out[consts.SamplesPerGr*4*0:])
+	out := make([]byte, f.header.BytesPerFrame())
+	nch := f.header.NumberOfChannels()
+	for gr := 0; gr < f.header.Granules(); gr++ {
+		for ch := 0; ch < nch; ch++ {
+			f.requantize(gr, ch)
+			f.reorder(gr, ch)
+		}
+		f.stereo(gr)
+		for ch := 0; ch < nch; ch++ {
+			f.antialias(gr, ch)
+			f.hybridSynthesis(gr, ch)
+			f.frequencyInversion(gr, ch)
+			f.subbandSynthesis(gr, ch, out[consts.SamplesPerGr*4*gr:])
+		}
+	}
 	return out
 }
 
@@ -179,7 +186,7 @@ func (f *Frame) requantizeProcessLong(gr, ch, is_pos, sfb int) {
 		0.25*(float64(f.sideInfo.GlobalGain[gr][ch])-210)
 	tmp1 := math.Pow(2.0, idx)
 	tmp2 := 0.0
-	if f.mainData.Is[0][0][is_pos] < 0.0 {
+	if f.mainData.Is[gr][ch][is_pos] < 0.0 {
 		tmp2 = -powtab34[int(-f.mainData.Is[gr][ch][is_pos])]
 	} else {
 		tmp2 = powtab34[int(f.mainData.Is[gr][ch][is_pos])]

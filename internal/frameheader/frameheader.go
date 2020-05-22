@@ -49,6 +49,18 @@ func (f FrameHeader) SamplingFrequency() consts.SamplingFrequency {
 	return consts.SamplingFrequency(int(f&0x00000c00) >> 10)
 }
 
+func (f FrameHeader) SamplingFrequencyValue() int {
+	switch f.SamplingFrequency() {
+	case 0:
+		return 44100 >> f.LowSamplingFrequency()
+	case 1:
+		return 48000 >> f.LowSamplingFrequency()
+	case 2:
+		return 32000 >> f.LowSamplingFrequency()
+	}
+	panic("not reahed")
+}
+
 // PaddingBit returns the padding bit stored in position 9
 func (f FrameHeader) PaddingBit() int {
 	return int(f&0x00000200) >> 9
@@ -109,6 +121,14 @@ func (f FrameHeader) LowSamplingFrequency() int {
 	return 1
 }
 
+func (f FrameHeader) BytesPerFrame() int {
+	return consts.SamplesPerGr * f.Granules() * 4
+}
+
+func (f FrameHeader) Granules() int {
+	return consts.GranulesMpeg1 >> f.LowSamplingFrequency() // MPEG2 uses only 1 granule
+}
+
 // IsValid returns a boolean value indicating whether the header is valid or not.
 func (f FrameHeader) IsValid() bool {
 	const sync = 0xffe00000
@@ -167,7 +187,7 @@ func (f FrameHeader) Bitrate() int {
 
 func (f FrameHeader) FrameSize() int {
 	return ((144*f.Bitrate())/
-		f.SamplingFrequency().Int() +
+		f.SamplingFrequencyValue() +
 		int(f.PaddingBit())) >> f.LowSamplingFrequency()
 }
 
@@ -243,5 +263,8 @@ func Read(source FullReader, position int64) (h FrameHeader, startPosition int64
 		return 0, 0, fmt.Errorf("mp3: free bitrate format is not supported. Header word is 0x%08x at position %d",
 			header, position)
 	}
+
+	// determine the amount of granules
+
 	return header, position, nil
 }

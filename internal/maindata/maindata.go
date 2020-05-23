@@ -134,7 +134,6 @@ func getScaleFactorsMpeg2(m *bits.Bits, header frameheader.FrameHeader, sideInfo
 		}
 	}
 
-	// pnt = (unsigned char const *) scalefacSizes2[n][(slen >> 12) & 0x7];
 	scaleFacSecondIndex := (slen >> 12) & 0x7
 
 	var scaleFactors []int

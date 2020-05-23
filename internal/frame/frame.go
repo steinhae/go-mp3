@@ -369,7 +369,7 @@ func (f *Frame) stereoProcessIntensityLong(gr int, sfb int) {
 
 func (f *Frame) stereoProcessIntensityShort(gr int, sfb int) {
 	is_ratio_l := float32(0)
-	// is_ratio_r := float32(0)
+	is_ratio_r := float32(0)
 	_, sfBandIndicesShort := getSfBandIndicesArray(&f.header)
 	// The window length
 	win_len := sfBandIndicesShort[sfb+1] - sfBandIndicesShort[sfb]
@@ -382,16 +382,16 @@ func (f *Frame) stereoProcessIntensityShort(gr int, sfb int) {
 			sfb_stop := sfb_start + win_len
 			if is_pos == 6 { // tan((6*PI)/12 = PI/2) needs special treatment!
 				is_ratio_l = 1.0
-				// is_ratio_r = 0.0
+				is_ratio_r = 0.0
 			} else {
 				is_ratio_l = isRatios[is_pos] / (1.0 + isRatios[is_pos])
-				// is_ratio_r = 1.0 / (1.0 + isRatios[is_pos])
+				is_ratio_r = 1.0 / (1.0 + isRatios[is_pos])
 			}
 			// Now decode all samples in this scale factor band
 			for i := sfb_start; i < sfb_stop; i++ {
 				// https://github.com/technosaurus/PDMP3/issues/3
 				f.mainData.Is[gr][0][i] *= is_ratio_l
-				// f.mainData.Is[gr][1][i] *= is_ratio_r
+				f.mainData.Is[gr][1][i] *= is_ratio_r
 			}
 		}
 	}

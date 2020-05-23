@@ -66,9 +66,7 @@ func Read(pos int64, source FullReader, header frameheader.FrameHeader) (*SideIn
 	if framesize > 2000 {
 		return nil, fmt.Errorf("mp3: framesize = %d\n", framesize)
 	}
-	// Sideinfo is 17 bytes for one channel and 32 bytes for two
 	sideinfo_size := header.SideInfoSize()
-
 	fmt.Println("SideInfo size:", sideinfo_size)
 	// Main data size is the rest of the frame,including ancillary data
 	main_data_size := framesize - sideinfo_size - 4 // sync+header
@@ -94,6 +92,8 @@ func Read(pos int64, source FullReader, header frameheader.FrameHeader) (*SideIn
 }
 
 func readSideInfoMpeg1(s *bits.Bits, nch int, header frameheader.FrameHeader) (*SideInfo, error) {
+	// Parse audio data
+	// Pointer to where we should start reading main data
 	si := &SideInfo{}
 	si.MainDataBegin = s.Bits(9)
 	// Get private bits. Not used for anything.

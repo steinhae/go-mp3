@@ -263,8 +263,5 @@ func Read(source FullReader, position int64) (h FrameHeader, startPosition int64
 		return 0, 0, fmt.Errorf("mp3: free bitrate format is not supported. Header word is 0x%08x at position %d",
 			header, position)
 	}
-
-	// determine the amount of granules
-
 	return header, position, nil
 }

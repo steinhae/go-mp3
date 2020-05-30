@@ -35,18 +35,6 @@ const (
 	Version1        Version = 3
 )
 
-func (id Version) Float() float32 {
-	switch id {
-	case Version2_5:
-		return 2.5
-	case Version2:
-		return 2
-	case Version1:
-		return 1
-	}
-	panic("not reached")
-}
-
 type Layer int
 
 const (
@@ -64,20 +52,6 @@ const (
 	ModeDualChannel   Mode = 2
 	ModeSingleChannel Mode = 3
 )
-
-func (m Mode) String() string {
-	switch m {
-	case ModeStereo:
-		return "Stereo"
-	case ModeJointStereo:
-		return "Joint Stereo"
-	case ModeSingleChannel:
-		return "Single Channel"
-	case ModeDualChannel:
-		return "Dual Channel"
-	}
-	panic("not reached")
-}
 
 const (
 	SamplesPerGr  = 576

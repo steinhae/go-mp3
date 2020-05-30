@@ -115,7 +115,7 @@ func (f FrameHeader) Emphasis() int {
 
 // LowSamplingFrequency returns whether the frame is encoded in a low sampling frequency => 0 = MPEG-1, 1 = MPEG-2/2.5
 func (f FrameHeader) LowSamplingFrequency() int {
-	if f.ID().Float() == 1 {
+	if f.ID() == consts.Version1 {
 		return 0
 	}
 	return 1

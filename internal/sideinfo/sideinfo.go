@@ -53,7 +53,7 @@ type SideInfo struct {
 	Count1            [2][2]int // Not in file, calc by huffman decoder
 }
 
-func Read(pos int64, source FullReader, header frameheader.FrameHeader) (*SideInfo, error) {
+func Read(source FullReader, header frameheader.FrameHeader) (*SideInfo, error) {
 	nch := header.NumberOfChannels()
 	framesize := header.FrameSize()
 	if framesize > 2000 {

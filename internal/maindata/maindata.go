@@ -90,7 +90,6 @@ func Read(source FullReader, prev *bits.Bits, header frameheader.FrameHeader, si
 
 	// Main data size is the rest of the frame,including ancillary data
 	main_data_size := framesize - sideinfo_size - 4 // sync+header
-
 	// CRC is 2 bytes
 	if header.ProtectionBit() == 0 {
 		main_data_size -= 2
@@ -102,7 +101,7 @@ func Read(source FullReader, prev *bits.Bits, header frameheader.FrameHeader, si
 	m, err := read(source, prev, main_data_size, sideInfo.MainDataBegin)
 	if err != nil {
 		// This could be due to not enough data in reservoir
-		// return nil, nil, err
+		return nil, nil, err
 	}
 
 	if header.LowSamplingFrequency() == 1 {

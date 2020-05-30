@@ -28,9 +28,8 @@ import (
 )
 
 var (
-	powtab34   = make([]float64, 8207)
-	pretab     = []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 3, 3, 3, 2, 0}
-	frameCount = 1
+	powtab34 = make([]float64, 8207)
+	pretab   = []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 3, 3, 3, 2, 0}
 )
 
 func init() {
@@ -76,14 +75,14 @@ func Read(source FullReader, position int64, prev *Frame) (frame *Frame, startPo
 		}
 	}
 
-	// if h.ID() != consts.Version1 {
-	// 	return nil, 0, fmt.Errorf("mp3: only MPEG version 1 (want %d; got %d) is supported", consts.Version1, h.ID())
-	// }
+	if h.ID() == consts.Version2_5 {
+		return nil, 0, fmt.Errorf("mp3: MPEG version 2.5 is not supported")
+	}
 	if h.Layer() != consts.Layer3 {
 		return nil, 0, fmt.Errorf("mp3: only layer3 (want %d; got %d) is supported", consts.Layer3, h.Layer())
 	}
 
-	si, err := sideinfo.Read(position, source, h)
+	si, err := sideinfo.Read(source, h)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -305,7 +304,7 @@ var (
 
 func (f *Frame) stereoProcessIntensityLong(gr int, sfb int) {
 	is_ratio_l := float32(0)
-	// is_ratio_r := float32(0)
+	is_ratio_r := float32(0)
 	// Check that((is_pos[sfb]=scalefac) < 7) => no intensity stereo
 	if is_pos := f.mainData.ScalefacL[gr][0][sfb]; is_pos < 7 {
 		sfBandIndicesLong, _ := getSfBandIndicesArray(&f.header)
@@ -313,15 +312,15 @@ func (f *Frame) stereoProcessIntensityLong(gr int, sfb int) {
 		sfb_stop := sfBandIndicesLong[sfb+1]
 		if is_pos == 6 { // tan((6*PI)/12 = PI/2) needs special treatment!
 			is_ratio_l = 1.0
-			// is_ratio_r = 0.0
+			is_ratio_r = 0.0
 		} else {
 			is_ratio_l = isRatios[is_pos] / (1.0 + isRatios[is_pos])
-			// is_ratio_r = 1.0 / (1.0 + isRatios[is_pos])
+			is_ratio_r = 1.0 / (1.0 + isRatios[is_pos])
 		}
 		// Now decode all samples in this scale factor band
 		for i := sfb_start; i < sfb_stop; i++ {
 			f.mainData.Is[gr][0][i] *= is_ratio_l
-			// f.mainData.Is[gr][1][i] *= is_ratio_r
+			f.mainData.Is[gr][1][i] *= is_ratio_r
 		}
 	}
 }

@@ -55,19 +55,12 @@ type SideInfo struct {
 
 func Read(pos int64, source FullReader, header frameheader.FrameHeader) (*SideInfo, error) {
 	nch := header.NumberOfChannels()
-
-	fmt.Println("----------------------------------")
-	fmt.Println("Side Info pos", pos)
-	fmt.Println("Number of channels:", nch)
-
 	framesize := header.FrameSize()
-	// Calculate header audio data size
-	fmt.Println("FrameSize:", framesize)
 	if framesize > 2000 {
 		return nil, fmt.Errorf("mp3: framesize = %d\n", framesize)
 	}
 	sideinfo_size := header.SideInfoSize()
-	fmt.Println("SideInfo size:", sideinfo_size)
+
 	// Main data size is the rest of the frame,including ancillary data
 	main_data_size := framesize - sideinfo_size - 4 // sync+header
 	// CRC is 2 bytes
@@ -167,8 +160,6 @@ func readSideInfoMpeg2(s *bits.Bits, nch int, header frameheader.FrameHeader) (*
 		si.Part2_3Length[0][ch] = s.Bits(12)
 		si.BigValues[0][ch] = s.Bits(9)
 
-		fmt.Println("Part2_3:", si.Part2_3Length[0][ch])
-		fmt.Println("BigValues:", si.BigValues[0][ch])
 		if si.BigValues[0][ch] > 288 {
 			fmt.Errorf("mp3: big values too large %v", si.BigValues[0][ch])
 			si.BigValues[0][ch] = 288
@@ -205,10 +196,8 @@ func readSideInfoMpeg2(s *bits.Bits, nch int, header frameheader.FrameHeader) (*
 			si.BlockType[0][ch] = 0 // Implicit
 			si.MixedBlockFlag[0][ch] = 0
 		}
-		// si.Preflag[0][ch] = s.Bits(1)
 		si.ScalefacScale[0][ch] = s.Bits(1)
 		si.Count1TableSelect[0][ch] = s.Bits(1)
 	}
-	fmt.Println("Block type:", si.BlockType[0][0])
 	return si, nil
 }

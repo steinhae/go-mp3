@@ -113,66 +113,67 @@ func Read(source FullReader, prev *bits.Bits, header frameheader.FrameHeader, si
 
 func getScaleFactorsMpeg2(m *bits.Bits, header frameheader.FrameHeader, sideInfo *sideinfo.SideInfo) (*MainData, *bits.Bits, error) {
 
-	if len(nSlen2) == 0 {
+	nch := header.NumberOfChannels()
+
+	if nSlen2[1] != 512 {
 		initSlen()
 	}
 
 	md := &MainData{}
 
-	part_2_start := m.BitPos()
+	for ch := 0; ch < nch; ch++ {
+		part_2_start := m.BitPos()
+		numbits := 0
+		slen := nSlen2[sideInfo.ScalefacCompress[0][ch]]
+		sideInfo.Preflag[0][ch] = (slen >> 15) & 0x1
 
-	// unsigned char const *pnt;
-	numbits := 0
-	slen := nSlen2[sideInfo.ScalefacCompress[0][0]]
-	sideInfo.Preflag[0][0] = (slen >> 15) & 0x1
-
-	n := 0
-	if sideInfo.BlockType[0][0] == 2 {
-		n++
-		if sideInfo.MixedBlockFlag[0][0] != 0 {
+		n := 0
+		if sideInfo.BlockType[0][ch] == 2 {
 			n++
-		}
-	}
-
-	scaleFacSecondIndex := (slen >> 12) & 0x7
-
-	var scaleFactors []int
-
-	for i := 0; i < 4; i++ {
-		num := slen & 0x7
-		slen >>= 3
-		if num > 0 {
-			for j := 0; j < scalefacSizesMpeg2[n][scaleFacSecondIndex][i]; j++ {
-				scaleFactors = append(scaleFactors, m.Bits(num))
+			if sideInfo.MixedBlockFlag[0][ch] != 0 {
+				n++
 			}
-			numbits += scalefacSizesMpeg2[n][scaleFacSecondIndex][i] * num
+		}
+
+		var scaleFactors []int
+		d := (slen >> 12) & 0x7
+
+		for i := 0; i < 4; i++ {
+			num := slen & 0x7
+			slen >>= 3
+			if num > 0 {
+				for j := 0; j < scalefacSizesMpeg2[n][d][i]; j++ {
+					scaleFactors = append(scaleFactors, m.Bits(num))
+				}
+				numbits += scalefacSizesMpeg2[n][d][i] * num
+			} else {
+				for j := 0; j < scalefacSizesMpeg2[n][d][i]; j++ {
+					scaleFactors = append(scaleFactors, 0)
+				}
+			}
+		}
+
+		n = (n << 1) + 1
+		for i := 0; i < n; i++ {
+			scaleFactors = append(scaleFactors, 0)
+		}
+
+		if len(scaleFactors) == 22 {
+			for i := 0; i < 22; i++ {
+				md.ScalefacL[0][ch][i] = scaleFactors[i]
+			}
 		} else {
-			for j := 0; j < scalefacSizesMpeg2[n][scaleFacSecondIndex][i]; j++ {
-				scaleFactors = append(scaleFactors, 0)
+			for x := 0; x < 13; x++ {
+				for i := 0; i < 3; i++ {
+					md.ScalefacS[0][ch][x][i] = scaleFactors[(x*3)+i]
+				}
 			}
 		}
-	}
 
-	n = (n << 1) + 1
-	for i := 0; i < n; i++ {
-		scaleFactors = append(scaleFactors, 0)
-	}
-
-	if len(scaleFactors) == 22 {
-		for i := 0; i < 22; i++ {
-			md.ScalefacL[0][0][i] = scaleFactors[i]
+		// Read Huffman coded data. Skip stuffing bits.
+		if err := readHuffman(m, header, sideInfo, md, part_2_start, 0, ch); err != nil {
+			return nil, nil, err
 		}
-	} else {
-		for x := 0; x < 13; x++ {
-			for i := 0; i < 3; i++ {
-				md.ScalefacS[0][0][x][i] = scaleFactors[(i+1)*x]
-			}
-		}
-	}
-
-	// Read Huffman coded data. Skip stuffing bits.
-	if err := readHuffman(m, header, sideInfo, md, part_2_start, 0, 0); err != nil {
-		return nil, nil, err
 	}
 	// The ancillary data is stored here,but we ignore it.
 	return md, m, nil

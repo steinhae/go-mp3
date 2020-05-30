@@ -64,22 +64,11 @@ func readCRC(source FullReader) error {
 	return nil
 }
 
-func printFrameHeader(pos int64, f *frameheader.FrameHeader) {
-	// fmt.Println("----------------------------------")
-	// fmt.Printf("Frame %v pos %v\n", frameCount, pos)
-	// frameCount++
-	// fmt.Printf("MPEG version %v layer %v | ", f.ID().Float(), f.Layer().Int())
-	// fmt.Printf(" Bitrate %v kbps |", frameheader.Bitrate(f.Layer(), f.BitrateIndex())/1000)
-	// fmt.Printf(" Sampling %v Hz |", f.SamplingFrequency().Int())
-	// fmt.Printf(" %v\n", f.Mode().String())
-}
-
 func Read(source FullReader, position int64, prev *Frame) (frame *Frame, startPosition int64, err error) {
 	h, pos, err := frameheader.Read(source, position)
 	if err != nil {
 		return nil, 0, err
 	}
-	printFrameHeader(position, &h)
 
 	if h.ProtectionBit() == 0 {
 		if err := readCRC(source); err != nil {
@@ -126,36 +115,6 @@ func Read(source FullReader, position int64, prev *Frame) (frame *Frame, startPo
 func (f *Frame) SamplingFrequency() int {
 	return f.header.SamplingFrequencyValue()
 }
-
-// func (f *Frame) dumpMain() []float32 {
-// 	res := make([]float32, 576)
-// 	for i := 0; i < 576; i++ {
-// 		res[i] = f.mainData.Is[0][0][i]
-// 	}
-// 	return res
-// }
-
-// func printDumps(dumps [][]float32) {
-// 	for i := 0; i < 576; i++ {
-// 		format := "%03d"
-// 		s := []interface{}{}
-// 		s = append(s, i)
-// 		for dumpIndex := 0; dumpIndex < len(dumps); dumpIndex++ {
-// 			format += " | %10f"
-// 			s = append(s, dumps[dumpIndex][i])
-// 		}
-// 		fmt.Printf(format+"\n", s...)
-// 	}
-// }
-
-// func openAndSeek(file string, seekTo int64) *os.File {
-// 	f, err := os.Open("/home/hannes/dev/go/minimp3/example/decode/" + file)
-// 	if err != nil {
-// 		panic(err)
-// 	}
-// 	f.Seek(seekTo, 0)
-// 	return f
-// }
 
 func (f *Frame) Decode() []byte {
 	out := make([]byte, f.header.BytesPerFrame())
@@ -212,7 +171,7 @@ func (f *Frame) requantizeProcessShort(gr, ch, is_pos, sfb, win int) {
 	f.mainData.Is[gr][ch][is_pos] = float32(tmp1 * tmp2)
 }
 
-func getSfBandIndicesArray(header *frameheader.FrameHeader) ([23]int, [23]int) {
+func getSfBandIndicesArray(header *frameheader.FrameHeader) ([]int, []int) {
 	sfreq := header.SamplingFrequency() // Setup sampling frequency index
 	lsf := header.LowSamplingFrequency()
 	sfBandIndicesShort := consts.SfBandIndices[lsf][sfreq][consts.SfBandIndicesShort]

@@ -95,7 +95,7 @@ const (
 	SfBandIndicesShort = 1
 )
 
-var SfBandIndices = [2][3][2][23]int{
+var SfBandIndices = [2][3][2][]int{
 	{ // MPEG 1
 		{ // Layer 3
 			{0, 4, 8, 12, 16, 20, 24, 30, 36, 44, 52, 62, 74, 90, 110, 134, 162, 196, 238, 288, 342, 418, 576},

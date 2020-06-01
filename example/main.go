@@ -28,7 +28,7 @@ import (
 )
 
 func run() error {
-	f, err := os.Open("mpeg2.mp3")
+	f, err := os.Open("classic.mp3")
 	if err != nil {
 		return err
 	}

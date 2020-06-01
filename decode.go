@@ -155,7 +155,7 @@ func (d *Decoder) ensureFrameStartsAndLength() error {
 		}
 		d.frameStarts = append(d.frameStarts, pos)
 		d.bytesPerFrame = int64(h.BytesPerFrame())
-		l += int64(d.bytesPerFrame)
+		l += d.bytesPerFrame
 
 		buf := make([]byte, h.FrameSize()-4)
 		if _, err := d.source.ReadFull(buf); err != nil {

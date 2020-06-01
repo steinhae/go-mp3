@@ -114,7 +114,7 @@ func getScaleFactorsMpeg2(m *bits.Bits, header frameheader.FrameHeader, sideInfo
 
 	nch := header.NumberOfChannels()
 
-	if nSlen2[1] != 512 {
+	if nSlen2[1] == 0 {
 		initSlen()
 	}
 

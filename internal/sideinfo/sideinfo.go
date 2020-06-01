@@ -53,6 +53,15 @@ type SideInfo struct {
 	Count1            [2][2]int // Not in file, calc by huffman decoder
 }
 
+var sideInfoBitsToRead = [2][4]int{
+	{ // MPEG 1
+		9, 5, 3, 4,
+	},
+	{ // MPEG 2
+		8, 1, 2, 9,
+	},
+}
+
 func Read(source FullReader, header frameheader.FrameHeader) (*SideInfo, error) {
 	nch := header.NumberOfChannels()
 	framesize := header.FrameSize()
@@ -78,36 +87,35 @@ func Read(source FullReader, header frameheader.FrameHeader) (*SideInfo, error) 
 	}
 	s := bits.New(buf)
 
-	if header.LowSamplingFrequency() == 1 {
-		return readSideInfoMpeg2(s, nch, header)
-	}
-	return readSideInfoMpeg1(s, nch, header)
-}
+	mpeg1Frame := header.LowSamplingFrequency() == 0
+	bitsToRead := sideInfoBitsToRead[header.LowSamplingFrequency()]
 
-func readSideInfoMpeg1(s *bits.Bits, nch int, header frameheader.FrameHeader) (*SideInfo, error) {
 	// Parse audio data
 	// Pointer to where we should start reading main data
 	si := &SideInfo{}
-	si.MainDataBegin = s.Bits(9)
+	si.MainDataBegin = s.Bits(bitsToRead[0])
 	// Get private bits. Not used for anything.
 	if header.Mode() == consts.ModeSingleChannel {
-		si.PrivateBits = s.Bits(5)
+		si.PrivateBits = s.Bits(bitsToRead[1])
 	} else {
-		si.PrivateBits = s.Bits(3)
+		si.PrivateBits = s.Bits(bitsToRead[2])
 	}
-	// Get scale factor selection information
-	for ch := 0; ch < nch; ch++ {
-		for scfsi_band := 0; scfsi_band < 4; scfsi_band++ {
-			si.Scfsi[ch][scfsi_band] = s.Bits(1)
+
+	if mpeg1Frame {
+		// Get scale factor selection information
+		for ch := 0; ch < nch; ch++ {
+			for scfsi_band := 0; scfsi_band < 4; scfsi_band++ {
+				si.Scfsi[ch][scfsi_band] = s.Bits(1)
+			}
 		}
 	}
 	// Get the rest of the side information
-	for gr := 0; gr < 2; gr++ {
+	for gr := 0; gr < header.Granules(); gr++ {
 		for ch := 0; ch < nch; ch++ {
 			si.Part2_3Length[gr][ch] = s.Bits(12)
 			si.BigValues[gr][ch] = s.Bits(9)
 			si.GlobalGain[gr][ch] = s.Bits(8)
-			si.ScalefacCompress[gr][ch] = s.Bits(4)
+			si.ScalefacCompress[gr][ch] = s.Bits(bitsToRead[3])
 			si.WinSwitchFlag[gr][ch] = s.Bits(1)
 			if si.WinSwitchFlag[gr][ch] == 1 {
 				si.BlockType[gr][ch] = s.Bits(2)
@@ -135,69 +143,16 @@ func readSideInfoMpeg1(s *bits.Bits, nch int, header frameheader.FrameHeader) (*
 				si.Region0Count[gr][ch] = s.Bits(4)
 				si.Region1Count[gr][ch] = s.Bits(3)
 				si.BlockType[gr][ch] = 0 // Implicit
+				if !mpeg1Frame {
+					si.MixedBlockFlag[0][ch] = 0
+				}
 			}
-			si.Preflag[gr][ch] = s.Bits(1)
+			if mpeg1Frame {
+				si.Preflag[gr][ch] = s.Bits(1)
+			}
 			si.ScalefacScale[gr][ch] = s.Bits(1)
 			si.Count1TableSelect[gr][ch] = s.Bits(1)
 		}
-	}
-	return si, nil
-}
-
-func readSideInfoMpeg2(s *bits.Bits, nch int, header frameheader.FrameHeader) (*SideInfo, error) {
-	// Parse audio data
-	// Pointer to where we should start reading main data
-	si := &SideInfo{}
-	si.MainDataBegin = s.Bits(8)
-	// Get private bits. Not used for anything.
-	if header.Mode() == consts.ModeSingleChannel {
-		si.PrivateBits = s.Bits(1)
-	} else {
-		si.PrivateBits = s.Bits(2)
-	}
-	// Get the rest of the side information
-	for ch := 0; ch < nch; ch++ {
-		si.Part2_3Length[0][ch] = s.Bits(12)
-		si.BigValues[0][ch] = s.Bits(9)
-
-		if si.BigValues[0][ch] > 288 {
-			fmt.Errorf("mp3: big values too large %v", si.BigValues[0][ch])
-			si.BigValues[0][ch] = 288
-		}
-
-		si.GlobalGain[0][ch] = s.Bits(8)
-		si.ScalefacCompress[0][ch] = s.Bits(9)
-		si.WinSwitchFlag[0][ch] = s.Bits(1)
-		if si.WinSwitchFlag[0][ch] == 1 {
-			si.BlockType[0][ch] = s.Bits(2)
-			si.MixedBlockFlag[0][ch] = s.Bits(1)
-			for region := 0; region < 2; region++ {
-				si.TableSelect[0][ch][region] = s.Bits(5)
-			}
-			for window := 0; window < 3; window++ {
-				si.SubblockGain[0][ch][window] = s.Bits(3)
-			}
-
-			// TODO: This is not listed on the spec. Is this correct??
-			if si.BlockType[0][ch] == 2 && si.MixedBlockFlag[0][ch] == 0 {
-				si.Region0Count[0][ch] = 8 // Implicit
-			} else {
-				si.Region0Count[0][ch] = 7 // Implicit
-			}
-			// The standard is wrong on this!!!
-			// Implicit
-			si.Region1Count[0][ch] = 20 - si.Region0Count[0][ch]
-		} else {
-			for region := 0; region < 3; region++ {
-				si.TableSelect[0][ch][region] = s.Bits(5)
-			}
-			si.Region0Count[0][ch] = s.Bits(4)
-			si.Region1Count[0][ch] = s.Bits(3)
-			si.BlockType[0][ch] = 0 // Implicit
-			si.MixedBlockFlag[0][ch] = 0
-		}
-		si.ScalefacScale[0][ch] = s.Bits(1)
-		si.Count1TableSelect[0][ch] = s.Bits(1)
 	}
 	return si, nil
 }

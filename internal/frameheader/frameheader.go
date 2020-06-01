@@ -58,7 +58,7 @@ func (f FrameHeader) SamplingFrequencyValue() int {
 	case 2:
 		return 32000 >> f.LowSamplingFrequency()
 	}
-	panic("not reahed")
+	panic("not reached")
 }
 
 // PaddingBit returns the padding bit stored in position 9
